@@ -22,6 +22,6 @@ Activate your QIIME 2 conda environment first, then:
 pip install git+https://github.com/ssaundy/q2-taxa-clean.git
 
 Or for development:
-git clone https://github.com/ssaundy/q2-taxa-clean.git
-cd q2-taxa-clean
-pip install -e . --no-deps
+- git clone https://github.com/ssaundy/q2-taxa-clean.git
+- cd q2-taxa-clean
+- pip install -e . --no-deps
