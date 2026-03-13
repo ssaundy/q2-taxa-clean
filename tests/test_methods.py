@@ -68,7 +68,7 @@ class TestIsInformative:
 class TestGetTerminalName:
     def test_standard_full_string(self):
         s = "d__Bacteria;p__Firmicutes;c__Bacilli;o__Lactobacillales;f__Lactobacillaceae;g__Lactobacillus;s__reuteri"
-        assert _get_terminal_name(s) == "reuteri"
+        assert _get_terminal_name(s) == "Lactobacillus reuteri"
 
     def test_empty_species_falls_back_to_genus(self):
         s = "d__Bacteria;p__Firmicutes;c__Bacilli;o__Lactobacillales;f__Lactobacillaceae;g__Lactobacillus;s__"
@@ -129,7 +129,7 @@ class TestCleanTaxonomy:
             }
         )
         result = clean_taxonomy(taxonomy)
-        assert result["feat1"] == "reuteri"
+        assert result["feat1"] == "Lactobacillus reuteri"
         assert result["feat2"] == "Bacteroides"
         assert result["feat3"] == "Rhizobiaceae"
 

@@ -44,17 +44,33 @@ def _is_informative(name: str) -> bool:
 
 def _get_terminal_name(taxonomy_string: str, max_level: int = 7) -> str:
     """
-    Return the most specific informative name from a QIIME2 taxonomy string
+    Return the most specific informative name from a QIIME2 taxonomy string.
 
     Walks from the terminal level back toward root until an informative
-    name is found. Falls back to the raw string if nothing useful exists
+    name is found. Falls back to the raw string if nothing useful exists.
+
+    If the most specific informative level is species (s__),
+    apends the genus name to give the proper nomenclature e.g. "Lactobacillus reuteri"
+    rather than spp alone. If no informative genus exists, returns species
+    name alone.
     """
     parts = [p.strip() for p in taxonomy_string.split(";")] \
         if ";" in taxonomy_string else [taxonomy_string.strip()]
 
-    for part in reversed(parts[:max_level]):
+    parts = parts[:max_level]
+
+    for i, part in enumerate(reversed(parts)):
         name = _clean_name(part)
         if _is_informative(name):
+            original_idx = len(parts) - 1 - i
+            is_species = parts[original_idx].strip().startswith("s__")
+
+            if is_species and max_level >= 6 and original_idx >= 1:
+                genus_raw = parts[original_idx - 1].strip()
+                genus = _clean_name(genus_raw)
+                if _is_informative(genus):
+                    return f"{genus} {name}"
+
             return name
 
     return taxonomy_string  # fallback

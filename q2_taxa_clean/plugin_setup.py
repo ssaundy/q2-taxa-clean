@@ -54,8 +54,8 @@ plugin.methods.register_function(
     ],
     input_descriptions={
         "taxonomy": (
-            "Taxonomy strings to clean, as produced by qiime feature-classifier "
-            "classify-sklearn or similar. Each string should be semicolon-delimited "
+            "Taxonomy strings to clean, as produced by qiime feature classifier "
+            "classify sklearn or similar. Each string should be semicolon delimited "
             "with standard QIIME 2 prefixes (d__, p__, c__, o__, f__, g__, s__)."
         ),
     },
@@ -77,9 +77,9 @@ plugin.methods.register_function(
     name="Clean taxonomy strings",
     description=(
         "Automatically clean QIIME 2 taxonomy strings by resolving each feature "
-        "to its most specific informative taxonomic name. Unlike qiime taxa collapse "
-        "(which merges features at a fixed level) or rescript edit-taxonomy "
-        "(which requires manual find-and-replace strings), this method automatically "
+        "to its most specific informative taxonomic name. Unlike the existing qiime taxa collapse "
+        "(which merges features at a fixed level) or rescript edit taxonomy "
+        "(which requires manual find and replace strings), this method automatically "
         "walks the taxonomy hierarchy from the terminal level upward to find the "
         "most specific named level for each feature individually. "
         "Handles uninformative labels such as g__, s__uncultured_bacterium, "
