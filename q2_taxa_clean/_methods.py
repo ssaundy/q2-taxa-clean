@@ -12,7 +12,8 @@ import pandas as pd
 SUFFIXES_TO_REMOVE = [
     "_unclassified", "_uncultured", "_bacterium", "_sp.",
     "_strain", "_group", "_cluster", "_clade", "_lineage",
-    " unclassified", " uncultured", " bacterium", " sp.",
+    " unclassified", " uncultured", " bacterium", " sp.", "uncultured_organism"
+    "uncultured organism"
 ]
 
 # complete word names that are uninformative after prefix stripping
