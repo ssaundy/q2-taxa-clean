@@ -171,12 +171,12 @@ class TestCleanTaxonomy:
         assert "abc123" in result.index
 
     def test_duplicate_names_disambiguated(self):
-    taxonomy = pd.Series(
-        {
-            "feat1": "d__Bacteria;p__Firmicutes;g__uncultured;s__uncultured_bacterium",
-            "feat2": "d__Bacteria;p__Firmicutes;g__uncultured;s__uncultured_bacterium",
-        }
-    )
-    result = clean_taxonomy(taxonomy)
-    assert result["feat1"] == "Firmicutes_1"
-    assert result["feat2"] == "Firmicutes_2"
+        taxonomy = pd.Series(
+            {
+                "feat1": "d__Bacteria;p__Firmicutes;g__uncultured;s__uncultured_bacterium",
+                "feat2": "d__Bacteria;p__Firmicutes;g__uncultured;s__uncultured_bacterium",
+            }
+        )
+        result = clean_taxonomy(taxonomy)
+        assert result["feat1"] == "Firmicutes_1"
+        assert result["feat2"] == "Firmicutes_2"
