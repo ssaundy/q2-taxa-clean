@@ -62,6 +62,21 @@ class TestIsInformative:
     def test_no_letters_is_not(self):
         assert _is_informative("__") is False
 
+    def test_uncultured_prefix_is_not_informative(self):
+        assert _is_informative("uncultured_Ruminococcus") is False
+
+    def test_unclassified_prefix_is_not_informative(self):
+        assert _is_informative("unclassified_Lachnospiraceae") is False
+
+    def test_candidatus_prefix_is_not_informative(self):
+        assert _is_informative("candidatus_Saccharimonas") is False
+
+    def test_bracketed_name_is_informative(self):
+    # brackets are SILVA reclassification flags, not uninformative prefixes
+        assert _is_informative("[Clostridium]_innocuum") is True
+
+
+
 
 ######## ── _get_terminal_name ── #########
 
@@ -90,6 +105,20 @@ class TestGetTerminalName:
     def test_no_semicolons(self):
         assert _get_terminal_name("g__Bacteroides") == "Bacteroides"
 
+    def test_uncultured_species_uncertain_genus_walks_to_family(self):
+        # uncultured_ prefix on both genus and species — should walk up to family
+        s = "d__Bacteria;p__Firmicutes;c__Clostridia;o__Oscillospirales;f__Ruminococcaceae;g__uncultured_Ruminococcus;s__uncultured_sp"
+        assert _get_terminal_name(s) == "Ruminococcaceae"
+
+    def test_valid_species_uncertain_genus_walks_to_family(self):
+        # species epithet is real but genus is uncertain — bare epithet must never be returned
+        s = "d__Bacteria;p__Firmicutes;c__Clostridia;o__Oscillospirales;f__Ruminococcaceae;g__uncultured_Ruminococcus;s__reuteri"
+        assert _get_terminal_name(s) == "Ruminococcaceae"
+
+    def test_genus_equals_species_walks_to_genus_only(self):
+        # Ruminococcus in species slot — should return genus, not "Ruminococcus Ruminococcus"
+        s = "d__Bacteria;p__Firmicutes;c__Clostridia;o__Oscillospirales;f__Ruminococcaceae;g__Ruminococcus;s__Ruminococcus"
+        assert _get_terminal_name(s) == "Ruminococcus"
 
 ####### ── _disambiguate ── ########
 
@@ -117,6 +146,7 @@ class TestDisambiguate:
         assert result == ["A_1", "B_1", "A_2", "C", "B_2"]
 
 
+
 ######## ── clean_taxonomy (INTEGRATION) ── ########
 
 class TestCleanTaxonomy:
@@ -141,12 +171,12 @@ class TestCleanTaxonomy:
         assert "abc123" in result.index
 
     def test_duplicate_names_disambiguated(self):
-        taxonomy = pd.Series(
-            {
-                "feat1": "d__Bacteria;p__Firmicutes;g__uncultured;s__uncultured_bacterium",
-                "feat2": "d__Bacteria;p__Bacteroidota;g__uncultured;s__uncultured_bacterium",
-            }
-        )
-        result = clean_taxonomy(taxonomy)
-        # Both should resolve to Firmicutes / Bacteroidota (different phyla)
-        assert result["feat1"] != result["feat2"]
+    taxonomy = pd.Series(
+        {
+            "feat1": "d__Bacteria;p__Firmicutes;g__uncultured;s__uncultured_bacterium",
+            "feat2": "d__Bacteria;p__Firmicutes;g__uncultured;s__uncultured_bacterium",
+        }
+    )
+    result = clean_taxonomy(taxonomy)
+    assert result["feat1"] == "Firmicutes_1"
+    assert result["feat2"] == "Firmicutes_2"

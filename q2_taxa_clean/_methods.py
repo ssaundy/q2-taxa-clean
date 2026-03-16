@@ -1,7 +1,7 @@
 """
 q2_taxa_clean/_methods.py
 
-Core logic for cleaning QIIME2 taxonomy strings.
+Operations logic for cleaning QIIME2 taxonomy strings.
 These functions are registered as QIIME2 Methods in plugin_setup.py.
 """
 
@@ -12,16 +12,35 @@ import pandas as pd
 SUFFIXES_TO_REMOVE = [
     "_unclassified", "_uncultured", "_bacterium", "_sp.",
     "_strain", "_group", "_cluster", "_clade", "_lineage",
-    " unclassified", " uncultured", " bacterium", " sp.", "uncultured_organism"
-    "uncultured organism"
+    " unclassified", " uncultured", " bacterium", " sp.",
+    " uncultured_organism", "_uncultured_organism",
+    " uncultured organism",
+    " gut_metagenome", "_gut_metagenome",
+    " human_gut", "_human_gut",
 ]
 
-# complete word names that are uninformative after prefix stripping
+# Complete word names that are uninformative after prefix stripping
 UNINFORMATIVE_WORDS = {
     "uncultured", "unclassified", "bacterium", "organism",
     "metagenome", "environmental", "clone", "sp", "spp",
-    "unknown", "unidentified",
+    "unknown", "unidentified", "rumen", "gut", "human_gut",
+    "uncultured_organism", "gut_metagenome",
 }
+
+# Names starting with these prefixes are uninformative at that level.
+# Rather than stripping the prefix and returning the remainder, the whole
+# level is rejected and the walker moves up to the next rank. This preserves
+# the integrity of classifier decisions and allows for clean informative labels for vis, 
+# if SILVA wrote uncultured_Ruminococcus at species level, the resolution is genus-level Ruminococcus from g__
+
+UNINFORMATIVE_PREFIXES = (
+    "uncultured_",
+    "uncultured ",
+    "unclassified_",
+    "unclassified ",
+    "candidatus_",
+    "candidatus ",
+)
 
 
 def _clean_name(raw: str) -> str:
@@ -33,12 +52,21 @@ def _clean_name(raw: str) -> str:
 
 
 def _is_informative(name: str) -> bool:
-    """Return True if a cleaned name carries useful biological meaning."""
+    """Return True if a cleaned name carries taxonomic clarity.
+
+    Rejects names that are empty, purely numeric, single characters,
+    bare uninformative words, or prefixed with qualifiers that indicate
+    the classifier could not resolve this level (i.e. uncultured_Ruminococcus).
+    In those prefix cases the whole level is rejected so the walker moves up
+    to the next rank rather than reconstructing a name from a failed assignment.
+    """
     if not name or name.isdigit() or len(name) <= 1:
         return False
     if not re.search(r"[a-zA-Z]", name):
         return False
     if name.lower() in UNINFORMATIVE_WORDS:
+        return False
+    if any(name.lower().startswith(p) for p in UNINFORMATIVE_PREFIXES):
         return False
     return True
 
@@ -51,9 +79,12 @@ def _get_terminal_name(taxonomy_string: str, max_level: int = 7) -> str:
     name is found. Falls back to the raw string if nothing useful exists.
 
     If the most specific informative level is species (s__),
-    apends the genus name to give the proper nomenclature e.g. "Lactobacillus reuteri"
-    rather than spp alone. If no informative genus exists, returns species
-    name alone.
+    appends the genus name to give proper genus species nomenclature e.g.
+    "Lactobacillus reuteri" rather than the epithet alone. If no informative
+    genus exists, the species level is skipped and the walker continues up
+    to the nearest clean higher rank. A bare species epithet is never
+    returned. Name assembly is skipped when genus and species names are identical (i.e.
+    "Ruminococcus Ruminococcus" which occurs when a genus name appears in the species slot).
     """
     parts = [p.strip() for p in taxonomy_string.split(";")] \
         if ";" in taxonomy_string else [taxonomy_string.strip()]
@@ -69,18 +100,20 @@ def _get_terminal_name(taxonomy_string: str, max_level: int = 7) -> str:
             if is_species and max_level >= 6 and original_idx >= 1:
                 genus_raw = parts[original_idx - 1].strip()
                 genus = _clean_name(genus_raw)
-                if _is_informative(genus):
+                if _is_informative(genus) and genus.lower() != name.lower():
                     return f"{genus} {name}"
+                else:
+                    continue  # genus uncertain, walk up
 
-            return name
+            return name  # only reached for non-species levels
 
     return taxonomy_string  # fallback
 
 
 def _disambiguate(index: list) -> list:
     """
-    Append _1, _2, _3 to ALL occurrences of duplicate names
-    First occurrence also gets a suffix for consistency
+    Append _1, _2, _3 to ALL occurrences of duplicate names.
+    First occurrence also gets a suffix for consistency.
     """
     from collections import Counter
     duplicates = {n for n, c in Counter(index).items() if c > 1}
@@ -100,10 +133,10 @@ def clean_taxonomy(
     max_level: int = 7,
 ) -> pd.Series:
     """
-    QIIME2 Method: clean taxonomy strings to their most specific named level
+    QIIME2 Method: clean taxonomy strings to their most specific named level.
 
     Takes a pd.Series of taxonomy strings (as returned from
-    FeatureData[Taxonomy]) and returns a cleaned Series
+    FeatureData[Taxonomy]) and returns a cleaned Series.
 
     Parameters
     ----------
