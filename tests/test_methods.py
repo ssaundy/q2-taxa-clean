@@ -11,6 +11,7 @@ from q2_taxa_clean._methods import (
     _clean_name,
     _is_informative,
     _get_terminal_name,
+    _get_truncated_taxonomy,   
     _disambiguate,
     clean_taxonomy,
 )
@@ -43,6 +44,9 @@ class TestCleanName:
     def test_no_prefix(self):
         assert _clean_name("Bacteroides") == "Bacteroides"
 
+    def test_stacked_suffixes(self):
+        assert _clean_name("f__Lachnospiraceae_unclassified_group") == "Lachnospiraceae"
+
 
 ####### ── _is_informative ── ########
 
@@ -72,10 +76,8 @@ class TestIsInformative:
         assert _is_informative("candidatus_Saccharimonas") is False
 
     def test_bracketed_name_is_informative(self):
-    # brackets are SILVA reclassification flags, not uninformative prefixes
+        # brackets are SILVA reclassification flags, not uninformative prefixes
         assert _is_informative("[Clostridium]_innocuum") is True
-
-
 
 
 ######## ── _get_terminal_name ── #########
@@ -115,10 +117,57 @@ class TestGetTerminalName:
         s = "d__Bacteria;p__Firmicutes;c__Clostridia;o__Oscillospirales;f__Ruminococcaceae;g__uncultured_Ruminococcus;s__reuteri"
         assert _get_terminal_name(s) == "Ruminococcaceae"
 
-    def test_genus_equals_species_walks_to_genus_only(self):
-        # Ruminococcus in species slot — should return genus, not "Ruminococcus Ruminococcus"
+    def test_genus_equals_species_returns_genus(self):
+        # Ruminococcus in species slot, identity check fires continue, walker resolves to genus
         s = "d__Bacteria;p__Firmicutes;c__Clostridia;o__Oscillospirales;f__Ruminococcaceae;g__Ruminococcus;s__Ruminococcus"
         assert _get_terminal_name(s) == "Ruminococcus"
+
+
+####### ── _get_truncated_taxonomy ── ########
+
+class TestGetTruncatedTaxonomy:
+    def test_standard_full_string_preserves_path(self):
+        # full informative string — should come back intact to species level
+        s = "d__Bacteria;p__Firmicutes;c__Bacilli;o__Lactobacillales;f__Lactobacillaceae;g__Lactobacillus;s__reuteri"
+        assert _get_truncated_taxonomy(s) == "d__Bacteria; p__Firmicutes; c__Bacilli; o__Lactobacillales; f__Lactobacillaceae; g__Lactobacillus; s__reuteri"
+
+    def test_empty_species_truncates_at_genus(self):
+        s = "d__Bacteria;p__Firmicutes;c__Bacilli;o__Lactobacillales;f__Lactobacillaceae;g__Lactobacillus;s__"
+        assert _get_truncated_taxonomy(s) == "d__Bacteria; p__Firmicutes; c__Bacilli; o__Lactobacillales; f__Lactobacillaceae; g__Lactobacillus"
+
+    def test_uncultured_genus_truncates_at_family(self):
+        s = "d__Bacteria;p__Firmicutes;c__Clostridia;o__Oscillospirales;f__Ruminococcaceae;g__uncultured;s__uncultured_bacterium"
+        assert _get_truncated_taxonomy(s) == "d__Bacteria; p__Firmicutes; c__Clostridia; o__Oscillospirales; f__Ruminococcaceae"
+
+    def test_valid_species_good_genus_returns_full_path_to_species(self):
+        # both genus and species informative — full path preserved to s__ level
+        s = "d__Bacteria;p__Firmicutes;c__Bacilli;o__Lactobacillales;f__Lactobacillaceae;g__Lactobacillus;s__reuteri"
+        result = _get_truncated_taxonomy(s)
+        assert result.endswith("s__reuteri")
+
+    def test_uncertain_genus_skips_species_truncates_at_family(self):
+        # species present but genus is uncertain — bare epithet must never be returned
+        s = "d__Bacteria;p__Firmicutes;c__Clostridia;o__Oscillospirales;f__Ruminococcaceae;g__uncultured_Ruminococcus;s__reuteri"
+        assert _get_truncated_taxonomy(s) == "d__Bacteria; p__Firmicutes; c__Clostridia; o__Oscillospirales; f__Ruminococcaceae"
+
+    def test_genus_equals_species_truncates_at_genus(self):
+        # Ruminococcus in species slot — identity check fires continue, truncates at g__ level
+        s = "d__Bacteria;p__Firmicutes;c__Clostridia;o__Oscillospirales;f__Ruminococcaceae;g__Ruminococcus;s__Ruminococcus"
+        assert _get_truncated_taxonomy(s) == "d__Bacteria; p__Firmicutes; c__Clostridia; o__Oscillospirales; f__Ruminococcaceae; g__Ruminococcus"
+
+    def test_max_level_truncates_at_genus(self):
+        s = "d__Bacteria;p__Firmicutes;c__Bacilli;o__Lactobacillales;f__Lactobacillaceae;g__Lactobacillus;s__reuteri"
+        result = _get_truncated_taxonomy(s, max_level=6)
+        assert result == "d__Bacteria; p__Firmicutes; c__Bacilli; o__Lactobacillales; f__Lactobacillaceae; g__Lactobacillus"
+
+    def test_all_empty_returns_raw(self):
+        s = "d__;p__;c__;o__;f__;g__;s__"
+        assert _get_truncated_taxonomy(s) == s
+
+    def test_no_semicolons(self):
+        # single-level string, no semicolons — branch handled separately in function
+        assert _get_truncated_taxonomy("g__Bacteroides") == "g__Bacteroides"
+
 
 ####### ── _disambiguate ── ########
 
@@ -146,11 +195,11 @@ class TestDisambiguate:
         assert result == ["A_1", "B_1", "A_2", "C", "B_2"]
 
 
-
 ######## ── clean_taxonomy (INTEGRATION) ── ########
 
 class TestCleanTaxonomy:
-    def test_basic_series(self):
+
+    def test_default_returns_truncated_strings(self):
         taxonomy = pd.Series(
             {
                 "feat1": "d__Bacteria;p__Firmicutes;c__Bacilli;o__Lactobacillales;f__Lactobacillaceae;g__Lactobacillus;s__reuteri",
@@ -159,6 +208,20 @@ class TestCleanTaxonomy:
             }
         )
         result = clean_taxonomy(taxonomy)
+        assert result["feat1"] == "d__Bacteria; p__Firmicutes; c__Bacilli; o__Lactobacillales; f__Lactobacillaceae; g__Lactobacillus; s__reuteri"
+        assert result["feat2"] == "d__Bacteria; p__Bacteroidota; c__Bacteroidia; o__Bacteroidales; f__Bacteroidaceae; g__Bacteroides"
+        assert result["feat3"] == "d__Bacteria; p__Proteobacteria; c__Alphaproteobacteria; o__Rhizobiales; f__Rhizobiaceae"
+
+  
+    def test_flat_labels_returns_readable_names(self):
+        taxonomy = pd.Series(
+            {
+                "feat1": "d__Bacteria;p__Firmicutes;c__Bacilli;o__Lactobacillales;f__Lactobacillaceae;g__Lactobacillus;s__reuteri",
+                "feat2": "d__Bacteria;p__Bacteroidota;c__Bacteroidia;o__Bacteroidales;f__Bacteroidaceae;g__Bacteroides;s__",
+                "feat3": "d__Bacteria;p__Proteobacteria;c__Alphaproteobacteria;o__Rhizobiales;f__Rhizobiaceae;g__uncultured;s__uncultured_bacterium",
+            }
+        )
+        result = clean_taxonomy(taxonomy, flat_labels=True)
         assert result["feat1"] == "Lactobacillus reuteri"
         assert result["feat2"] == "Bacteroides"
         assert result["feat3"] == "Rhizobiaceae"
@@ -177,6 +240,14 @@ class TestCleanTaxonomy:
                 "feat2": "d__Bacteria;p__Firmicutes;g__uncultured;s__uncultured_bacterium",
             }
         )
-        result = clean_taxonomy(taxonomy)
+        result = clean_taxonomy(taxonomy, flat_labels=True)  # FIXED: flat_labels=True required for disambiguation
         assert result["feat1"] == "Firmicutes_1"
         assert result["feat2"] == "Firmicutes_2"
+
+    
+    def test_max_level_passed_through(self):
+        taxonomy = pd.Series(
+            {"feat1": "d__Bacteria;p__Firmicutes;c__Bacilli;o__Lactobacillales;f__Lactobacillaceae;g__Lactobacillus;s__reuteri"}
+        )
+        result = clean_taxonomy(taxonomy, max_level=6)
+        assert result["feat1"] == "d__Bacteria; p__Firmicutes; c__Bacilli; o__Lactobacillales; f__Lactobacillaceae; g__Lactobacillus"
