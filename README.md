@@ -21,7 +21,7 @@ The classifier could not resolve genus or species... but existing tools give you
 
 ## What this plugin does
 
-For each feature, the plugin walks back up the taxonomy hierarchy from the terminal level, applying consistent rules to identify the deepest level that carries real taxonomic information. It returns the string truncated at that level, with the full path intact.
+For each feature, the plugin walks back up the taxonomy hierarchy from the terminal level, applying consistent rules to identify the deepest level that carries taxonomic information. It returns the string truncated at that level, with the full path intact.
 
 The example above becomes:
 
